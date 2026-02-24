@@ -1,22 +1,22 @@
 /**
  * Convert ESI fitting format to local Fitting type.
- * ESI items use "flag" integers to indicate slot position.
+ * ESI items use string flags like "HiSlot0", "LoSlot0", "MedSlot0", etc.
  */
 
 import type { ESIFitting } from "@/types/auth";
 import type { EveType, Fitting, FittedModule, SlotType } from "@/types/eve";
-import { getType, getGroup, getModuleSlotType } from "./esi";
+import { getType, getModuleSlotType } from "./esi";
 import { generateId } from "./utils";
-import { ESI_FLAG_TO_SLOT, slotToEsiFlag } from "./constants";
+import { ESI_FLAG_TO_SLOT, ESI_SPECIAL_FLAGS } from "./constants";
 import { ATTR } from "./constants";
 
 export async function esiFittingToLocal(
   esiFit: ESIFitting,
   shipType: EveType
 ): Promise<Fitting> {
-  const attrs = shipType.dogma_attributes || [];
+  const shipAttrs = shipType.dogma_attributes || [];
   const getAttr = (id: number, fallback: number) =>
-    attrs.find((a) => a.attribute_id === id)?.value ?? fallback;
+    shipAttrs.find((a) => a.attribute_id === id)?.value ?? fallback;
 
   const highSlotCount = Math.min(getAttr(ATTR.HI_SLOTS, 8), 8);
   const midSlotCount = Math.min(getAttr(ATTR.MED_SLOTS, 5), 8);
@@ -42,19 +42,7 @@ export async function esiFittingToLocal(
     updated_at: new Date().toISOString(),
   };
 
-  // Track slot indices per type
-  const slotIndices: Record<string, number> = {
-    high: 0,
-    mid: 0,
-    low: 0,
-    rig: 0,
-    subsystem: 0,
-  };
-
   for (const item of esiFit.items) {
-    console.log('[ESI fitting] item flag:', JSON.stringify(item.flag), 'type_id:', item.type_id);
-    const flagInfo = ESI_FLAG_TO_SLOT[item.flag];
-
     let itemType: EveType;
     try {
       itemType = await getType(item.type_id);
@@ -62,69 +50,94 @@ export async function esiFittingToLocal(
       continue; // Skip items we can't resolve
     }
 
-    const module: Omit<FittedModule, "slot_type" | "slot_index"> = {
-      id: generateId(),
-      type_id: item.type_id,
-      name: itemType.name,
-      state: "active" as const,
-      group_id: itemType.group_id,
-    };
+    // Build flat attribute and effect maps for stats calculation
+    const attrs: Record<number, number> = {};
+    for (const a of itemType.dogma_attributes ?? []) {
+      attrs[a.attribute_id] = a.value;
+    }
+    const effects = (itemType.dogma_effects ?? []).map((e) => e.effect_id);
 
-    if (flagInfo) {
-      const { slotType, index } = flagInfo;
-
-      if (slotType === "drone") {
-        for (let i = 0; i < item.quantity; i++) {
-          fitting.drones.push({
-            ...module,
-            slot_type: "drone",
-            slot_index: fitting.drones.length,
-          });
-        }
-        continue;
-      }
-
-      if (slotType === "cargo") {
-        fitting.cargo.push({
-          ...module,
-          slot_type: "cargo",
-          slot_index: fitting.cargo.length,
-        });
-        continue;
-      }
-
-      // Slot-based modules
+    // Check slot-based flags (HiSlot0, MedSlot0, LoSlot0, RigSlot0, SubSystemSlot0)
+    const slotInfo = ESI_FLAG_TO_SLOT[item.flag];
+    if (slotInfo) {
+      const { slotType, index } = slotInfo;
+      const state = (slotType === "rig" || slotType === "subsystem") ? "passive" as const : "active" as const;
+      const module: FittedModule = {
+        id: generateId(),
+        type_id: item.type_id,
+        name: itemType.name,
+        state,
+        group_id: itemType.group_id,
+        attributes: attrs,
+        effects,
+        slot_type: slotType,
+        slot_index: index,
+      };
       const slotArray = getSlotArray(fitting, slotType);
-      if (index !== undefined && index < slotArray.length) {
-        slotArray[index] = {
-          ...module,
-          slot_type: slotType,
-          slot_index: index,
-        };
+      if (index < slotArray.length) {
+        slotArray[index] = module;
       } else {
-        // Find next empty slot
         const nextIdx = slotArray.findIndex((s) => s === null);
         if (nextIdx !== -1) {
-          slotArray[nextIdx] = {
-            ...module,
-            slot_type: slotType,
-            slot_index: nextIdx,
-          };
+          slotArray[nextIdx] = { ...module, slot_index: nextIdx };
         }
       }
-    } else {
-      // Unknown flag — try to detect slot type from module data
-      const detectedSlot = await getModuleSlotType(item.type_id).catch(() => null);
-      if (detectedSlot && detectedSlot !== "drone") {
-        const slotArray = getSlotArray(fitting, detectedSlot as SlotType);
-        const nextIdx = slotArray.findIndex((s) => s === null);
-        if (nextIdx !== -1) {
-          slotArray[nextIdx] = {
-            ...module,
-            slot_type: detectedSlot as SlotType,
-            slot_index: nextIdx,
-          };
-        }
+      continue;
+    }
+
+    // Check special flags (DroneBay, Cargo, FighterBay)
+    const specialSlot = ESI_SPECIAL_FLAGS[item.flag];
+    if (specialSlot === "drone") {
+      for (let i = 0; i < item.quantity; i++) {
+        fitting.drones.push({
+          id: i === 0 ? generateId() : generateId(),
+          type_id: item.type_id,
+          name: itemType.name,
+          state: "active",
+          group_id: itemType.group_id,
+          attributes: attrs,
+          effects,
+          slot_type: "drone",
+          slot_index: fitting.drones.length,
+        });
+      }
+      continue;
+    }
+
+    if (specialSlot === "cargo") {
+      fitting.cargo.push({
+        id: generateId(),
+        type_id: item.type_id,
+        name: itemType.name,
+        state: "passive",
+        group_id: itemType.group_id,
+        attributes: attrs,
+        effects,
+        slot_type: "cargo",
+        slot_index: fitting.cargo.length,
+      });
+      continue;
+    }
+
+    // Unknown flag — try to detect slot type from module effects
+    const detectedSlot = await getModuleSlotType(item.type_id).catch(() => null);
+    if (detectedSlot && detectedSlot !== "drone") {
+      const st = detectedSlot as SlotType;
+      const state = (st === "rig" || st === "subsystem") ? "passive" as const : "active" as const;
+      const slotArray = getSlotArray(fitting, st);
+      const nextIdx = slotArray.findIndex((s) => s === null);
+      if (nextIdx !== -1) {
+        slotArray[nextIdx] = {
+          id: generateId(),
+          type_id: item.type_id,
+          name: itemType.name,
+          state,
+          group_id: itemType.group_id,
+          attributes: attrs,
+          effects,
+          slot_type: st,
+          slot_index: nextIdx,
+        };
       }
     }
   }

@@ -45,7 +45,7 @@ export interface ESIFitting {
 
 export interface ESIFittingItem {
   type_id: number;
-  flag: number;
+  flag: string;
   quantity: number;
 }
 

@@ -267,61 +267,42 @@ export const DATASOURCE = 'tranquility';
 
 import type { SlotType } from '@/types/eve';
 
-export const ESI_FLAG_TO_SLOT: Record<number, { slotType: SlotType; index?: number }> = {
-  // Low slots (11–18) — LoSlot0–LoSlot7
-  11: { slotType: 'low', index: 0 },
-  12: { slotType: 'low', index: 1 },
-  13: { slotType: 'low', index: 2 },
-  14: { slotType: 'low', index: 3 },
-  15: { slotType: 'low', index: 4 },
-  16: { slotType: 'low', index: 5 },
-  17: { slotType: 'low', index: 6 },
-  18: { slotType: 'low', index: 7 },
-  // Mid slots (19–26) — MedSlot0–MedSlot7
-  19: { slotType: 'mid', index: 0 },
-  20: { slotType: 'mid', index: 1 },
-  21: { slotType: 'mid', index: 2 },
-  22: { slotType: 'mid', index: 3 },
-  23: { slotType: 'mid', index: 4 },
-  24: { slotType: 'mid', index: 5 },
-  25: { slotType: 'mid', index: 6 },
-  26: { slotType: 'mid', index: 7 },
-  // High slots (27–34) — HiSlot0–HiSlot7
-  27: { slotType: 'high', index: 0 },
-  28: { slotType: 'high', index: 1 },
-  29: { slotType: 'high', index: 2 },
-  30: { slotType: 'high', index: 3 },
-  31: { slotType: 'high', index: 4 },
-  32: { slotType: 'high', index: 5 },
-  33: { slotType: 'high', index: 6 },
-  34: { slotType: 'high', index: 7 },
-  // Rig slots (92–94)
-  92: { slotType: 'rig', index: 0 },
-  93: { slotType: 'rig', index: 1 },
-  94: { slotType: 'rig', index: 2 },
-  // Subsystem slots (125–132)
-  125: { slotType: 'subsystem', index: 0 },
-  126: { slotType: 'subsystem', index: 1 },
-  127: { slotType: 'subsystem', index: 2 },
-  128: { slotType: 'subsystem', index: 3 },
-  // Drone bay (87)
-  87: { slotType: 'drone' },
-  // Cargo (5)
-  5: { slotType: 'cargo' },
+// ESI fittings return flag as a string enum (e.g. "HiSlot0", "LoSlot0", "MedSlot0")
+export const ESI_FLAG_TO_SLOT: Record<string, { slotType: SlotType; index: number }> = {};
+
+// Build the mapping programmatically
+const FLAG_PREFIXES: [string, SlotType][] = [
+  ['HiSlot', 'high'],
+  ['MedSlot', 'mid'],
+  ['LoSlot', 'low'],
+  ['RigSlot', 'rig'],
+  ['SubSystemSlot', 'subsystem'],
+];
+for (const [prefix, slotType] of FLAG_PREFIXES) {
+  for (let i = 0; i < 8; i++) {
+    ESI_FLAG_TO_SLOT[`${prefix}${i}`] = { slotType, index: i };
+  }
+}
+
+// Special flags (no index)
+export const ESI_SPECIAL_FLAGS: Record<string, SlotType> = {
+  DroneBay: 'drone',
+  FighterBay: 'drone',
+  Cargo: 'cargo',
 };
 
-const SLOT_TO_FLAG_BASE: Record<string, number> = {
-  low: 11,
-  mid: 19,
-  high: 27,
-  rig: 92,
-  subsystem: 125,
+const SLOT_TO_FLAG_PREFIX: Record<string, string> = {
+  high: 'HiSlot',
+  mid: 'MedSlot',
+  low: 'LoSlot',
+  rig: 'RigSlot',
+  subsystem: 'SubSystemSlot',
 };
 
-export function slotToEsiFlag(slotType: SlotType, index: number): number {
-  if (slotType === 'drone') return 87;
-  if (slotType === 'cargo') return 5;
-  const base = SLOT_TO_FLAG_BASE[slotType];
-  if (base === undefined) return 0;
-  return base + index;
+export function slotToEsiFlag(slotType: SlotType, index: number): string {
+  if (slotType === 'drone') return 'DroneBay';
+  if (slotType === 'cargo') return 'Cargo';
+  const prefix = SLOT_TO_FLAG_PREFIX[slotType];
+  if (!prefix) return 'Invalid';
+  return `${prefix}${index}`;
 }
