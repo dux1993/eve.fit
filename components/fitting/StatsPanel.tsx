@@ -14,6 +14,7 @@ import { DAMAGE_COLORS } from "@/lib/utils";
 import { Shield, Crosshair, Navigation, Cpu, Gauge, Target } from "lucide-react";
 import { SkillModeToggle } from "./SkillModeToggle";
 import { SkillModeWatcher } from "./SkillModeWatcher";
+import { SkillPlanSection } from "./SkillPlanSection";
 import type { SkillDeltas } from "@/types/eve";
 
 export function StatsPanel() {
@@ -191,6 +192,7 @@ export function StatsPanel() {
           )}
         </StatCard>
       </div>
+      <SkillPlanSection />
     </div>
   );
 }

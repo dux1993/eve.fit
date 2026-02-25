@@ -214,6 +214,24 @@ export type SkillMode = 'none' | 'allV' | 'mySkills';
 /** Map of skill type_id → trained level (1-5) */
 export type SkillMap = Record<number, number>;
 
+// ─── Skill plan ─────────────────────────────────────────────────────────────
+
+export interface SkillRequirement {
+  skill_type_id: number;
+  skill_name: string;
+  required_level: number;
+}
+
+export interface SkillPlanStage {
+  name: string;
+  skills: SkillRequirement[];
+  total: number;
+}
+
+export interface SkillPlan {
+  stages: [SkillPlanStage, SkillPlanStage, SkillPlanStage];
+}
+
 /** Delta values for stats affected by skills (skilled - base) */
 export interface SkillDeltas {
   cpu_total: number;

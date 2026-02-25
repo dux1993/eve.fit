@@ -256,6 +256,17 @@ export const SUPPORT_SKILL_IDS = {
   SIGNATURE_ANALYSIS: 3432,        // +5%/lvl scan resolution
 } as const;
 
+// ─── Skill requirement attribute pairs ────────────────────────────────────────
+// Each pair: [requiredSkillTypeID attr, requiredSkillLevel attr]
+export const SKILL_REQ_ATTRS: [number, number][] = [
+  [182, 277],
+  [183, 278],
+  [184, 279],
+  [1285, 1286],
+  [1287, 1288],
+  [1289, 1290],
+];
+
 export const ESI_BASE = 'https://esi.evetech.net/latest';
 export const EVE_IMAGE_BASE = 'https://images.evetech.net';
 
